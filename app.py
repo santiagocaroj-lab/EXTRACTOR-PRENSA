@@ -10,32 +10,29 @@ import shutil
 import gdown
 from fpdf import FPDF
 from datetime import date
+from concurrent.futures import ThreadPoolExecutor
 
 # ==========================================
-# 1. CONFIGURACIÓN ESTÉTICA Y PERSONALIDAD "LUCAS"
+# 1. ESTÉTICA Y PERSONALIDAD
 # ==========================================
-st.set_page_config(page_title="LUCAS - Extractor Jurisprudencial", layout="wide")
+st.set_page_config(page_title="LUCAS V2 - Alto Rendimiento", layout="wide")
 
 st.markdown("""
     <style>
-    .stApp { background-color: #f4f4f9; }
-    .lucas-title {
-        font-size: 40px; font-weight: 900; color: #1e3a8a;
-        border-left: 15px solid #ffc106; padding-left: 20px;
-        margin-bottom: 30px; text-transform: uppercase; font-family: 'Segoe UI', sans-serif;
+    .stApp { background-color: #f8f9fa; }
+    .lucas-header {
+        background: linear-gradient(90deg, #1e3a8a, #3b82f6);
+        color: white; padding: 20px; border-radius: 10px;
+        text-align: center; margin-bottom: 20px;
     }
-    .stButton>button {
-        background-color: #1e3a8a; color: white; border-radius: 12px;
-        height: 3em; width: 100%; font-weight: bold; border: none;
-    }
-    .stButton>button:hover { background-color: #ffc106; color: #1e3a8a; }
+    .nodal-critico { background-color: #ffe4e6 !important; font-weight: bold; }
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<div class='lucas-title'>🤖 LUCAS: Sistema de Análisis de Libertad de Prensa</div>", unsafe_allow_html=True)
+st.markdown("<div class='lucas-header'><h1>🤖 LUCAS V2: Extractor de Sentencias (Modo Turbo)</h1></div>", unsafe_allow_html=True)
 
 # ==========================================
-# 2. DEFINICIÓN DE CRITERIOS
+# 2. CONFIGURACIÓN TÉCNICA
 # ==========================================
 LINK_DRIVE = "https://drive.google.com/drive/folders/1viRyVTy0sIpkxvsz5JpgoBGmDauNFXCf"
 
@@ -49,181 +46,134 @@ KEYWORDS = [
 ]
 
 FRASES_CARGA = [
-    "Descargando expedientes de la nube...",
-    "Revisando palabras clave...",
-    "Leyendo PDF de la Corte Constitucional...",
-    "Solicitando ayuda externa de los bomberos...",
-    "¿No había algo más sencillo?",
-    "Organizando el universo de sentencias...",
-    "LUCAS está pensando (esto es raro)..."
+    "Optimizando núcleos de procesamiento...",
+    "Buscando co-ocurrencias críticas...",
+    "Leyendo PDFs a velocidad luz...",
+    "Solicitando ayuda externa de los bomberos (por si se calienta el servidor)...",
+    "¿No había algo más sencillo? LUCAS dice que no.",
+    "Analizando el tejido jurisprudencial..."
 ]
 
 # ==========================================
-# 3. FUNCIONES DE EJECUCIÓN REAL (Gdown + PyMuPDF)
+# 3. EL MOTOR DE ANÁLISIS (Optimizado)
 # ==========================================
 
-def extraer_info_pdf(ruta_pdf, keywords):
-    """Abre un PDF físico, busca sentencias, fechas y palabras clave."""
+def analizar_sentencia_paralelo(archivo_info):
+    """Función para procesar un solo PDF (usada por el ThreadPool)"""
+    ruta_pdf, nombre_archivo = archivo_info
     try:
-        documento = fitz.open(ruta_pdf)
-    except Exception:
-        return None  # Si el archivo está corrupto, lo salta
-
-    texto_completo = ""
-    paginas_encontradas = []
-    keywords_presentes = set()
-    
-    for i in range(len(documento)):
-        pagina = documento.load_page(i)
-        contenido = pagina.get_text().lower()
-        texto_completo += contenido
+        doc = fitz.open(ruta_pdf)
+        texto_completo = ""
+        paginas_encontradas = set()
+        keywords_detectadas = set()
         
-        encontrado_en_pagina = False
-        for kw in keywords:
-            if kw.lower() in contenido:
-                keywords_presentes.add(kw)
-                encontrado_en_pagina = True
+        for num_pag, pagina in enumerate(doc):
+            contenido = pagina.get_text().lower()
+            texto_completo += contenido
+            for kw in KEYWORDS:
+                if kw.lower() in contenido:
+                    keywords_detectadas.add(kw)
+                    paginas_encontradas.add(num_pag + 1)
         
-        if encontrado_en_pagina:
-            paginas_encontradas.append(str(i + 1))
-            
-    # Lógica AND solicitada
-    if "libertad de expresión" in texto_completo:
-        if any(x in texto_completo for x in ["libertad de prensa", "libertad de opinión", "libertad de información"]):
-            keywords_presentes.add("Lógica Especial: Libertad de Expresión + Prensa/Opinión/Info")
+        doc.close()
 
-    if not keywords_presentes:
-        return None # No cumple los requisitos, no entra al universo
-    
-    # Extraer un número de sentencia (Aproximación mediante Regex)
-    match_sentencia = re.search(r'(?i)(Sentencia\s+[TCSU]+-?\s*\d+/?\d*)', texto_completo)
-    sentencia_id = match_sentencia.group(1).upper() if match_sentencia else os.path.basename(ruta_pdf)
-    
-    # Extraer un año para el orden cronológico (Busca años entre 1992 y 2025)
-    match_anio = re.search(r'\b(199[2-9]|20[0-2][0-9])\b', texto_completo)
-    anio_referencia = int(match_anio.group(1)) if match_anio else 1900
+        if not keywords_detectadas:
+            return None
 
-    documento.close()
-    
-    return {
-        "Archivo Original": os.path.basename(ruta_pdf),
-        "Sentencia (Aprox)": sentencia_id,
-        "Año": anio_referencia,
-        "Páginas": ", ".join(paginas_encontradas),
-        "Puntos Nodales": ", ".join(list(keywords_presentes))
-    }
+        # --- ALGORITMO DE ATENCIÓN (Puntos Nodales) ---
+        conteo_keywords = len(keywords_detectadas)
+        es_punto_nodal = "🔥 CRÍTICO" if conteo_keywords >= 3 else "Normal"
+        
+        # Extraer Sentencia y Año
+        match_s = re.search(r'(?i)(Sentencia\s+[TCSU]+-?\s*\d+/?\d*)', texto_completo[:5000])
+        sentencia_id = match_s.group(1).upper() if match_s else nombre_archivo
+        
+        match_a = re.search(r'\b(199[2-9]|20[0-2][0-9])\b', texto_completo)
+        anio = int(match_a.group(1)) if match_a else 0
 
-def generar_excel(df):
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False, sheet_name='Sentencias_LUCAS')
-    return output.getvalue()
-
-def generar_pdf_reporte(df):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", 'B', 16)
-    pdf.cell(0, 10, "Reporte Universo de Sentencias - LUCAS", 0, 1, 'C')
-    pdf.ln(10)
-    pdf.set_font("Arial", '', 10)
-    for i, row in df.iterrows():
-        # Limpieza de caracteres para evitar errores en FPDF
-        texto_celda = f"Sentencia: {row['Sentencia (Aprox)']} | Año: {row['Año']} | Páginas: {row['Páginas']} \nKeywords: {row['Puntos Nodales']}\n" + "-"*50
-        texto_celda = texto_celda.encode('latin-1', 'replace').decode('latin-1')
-        pdf.multi_cell(0, 10, texto_celda)
-    return pdf.output(dest='S').encode('latin-1')
+        return {
+            "Año": anio,
+            "Sentencia": sentencia_id,
+            "Relevancia": es_punto_nodal,
+            "Keywords Halladas": conteo_keywords,
+            "Puntos Nodales (Palabras)": ", ".join(list(keywords_detectadas)),
+            "Páginas": ", ".join(map(str, sorted(paginas_encontradas)))
+        }
+    except:
+        return None
 
 # ==========================================
-# 4. INTERFAZ Y EJECUCIÓN
+# 4. EJECUCIÓN PRINCIPAL
 # ==========================================
 
-st.info(f"📁 Origen de Datos Configurado: {LINK_DRIVE}")
-
-if st.button("🚀 EJECUTAR EXTRACCIÓN REAL"):
-    
+if st.button("🚀 INICIAR EXTRACCIÓN TURBO"):
+    TEMP_DIR = "fast_temp_lucas"
     placeholder_carga = st.empty()
     progreso = st.progress(0)
     
-    TEMP_DIR = "temp_pdfs_lucas"
-    
     try:
-        # 1. Preparar directorio temporal
-        if os.path.exists(TEMP_DIR):
-            shutil.rmtree(TEMP_DIR)
+        # Limpieza inicial
+        if os.path.exists(TEMP_DIR): shutil.rmtree(TEMP_DIR)
         os.makedirs(TEMP_DIR)
+
+        # Descarga
+        placeholder_carga.info("📡 Conectando con Google Drive...")
+        gdown.download_folder(url=LINK_DRIVE, output=TEMP_DIR, quiet=True)
         
-        # 2. Descargar de Google Drive
-        placeholder_carga.markdown(f"### ⏳ {FRASES_CARGA[0]} (Esto puede tardar dependiendo del tamaño)")
-        progreso.progress(10)
+        archivos = [(os.path.join(TEMP_DIR, f), f) for f in os.listdir(TEMP_DIR) if f.lower().endswith('.pdf')]
+        total = len(archivos)
         
-        # gdown permite descargar carpetas completas usando la URL directa
-        gdown.download_folder(url=LINK_DRIVE, output=TEMP_DIR, quiet=True, use_cookies=False)
-        
-        # 3. Procesar Archivos
-        archivos_pdf = [f for f in os.listdir(TEMP_DIR) if f.lower().endswith('.pdf')]
-        total_archivos = len(archivos_pdf)
-        
-        if total_archivos == 0:
-            st.error("No se encontraron archivos PDF en el enlace proporcionado o Google Drive bloqueó la descarga.")
+        if total == 0:
+            st.error("No se detectaron archivos. Verifica el acceso al link.")
             st.stop()
 
+        # --- PROCESAMIENTO MULTI-HILO ---
         resultados = []
+        placeholder_carga.markdown(f"### ⚡ Procesando {total} archivos en paralelo...")
         
-        for i, archivo in enumerate(archivos_pdf):
-            # Animación de frases y barra de progreso real
-            frase = random.choice(FRASES_CARGA[1:])
-            porcentaje = int(10 + (90 * (i / total_archivos)))
-            progreso.progress(porcentaje)
-            placeholder_carga.markdown(f"### ⏳ {frase} \n*(Analizando {i+1} de {total_archivos} documentos)*")
+        # Usamos 4 hilos para no saturar el servidor de Streamlit pero ir mucho más rápido
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            for i, res in enumerate(executor.map(analizar_sentencia_paralelo, archivos)):
+                if res:
+                    resultados.append(res)
+                # Actualizar progreso cada 10%
+                progreso.progress(int((i+1)/total * 100))
+                if i % 5 == 0:
+                    placeholder_carga.markdown(f"### ⏳ {random.choice(FRASES_CARGA)} \n *Analizando: {i+1}/{total}*")
+
+        if resultados:
+            df = pd.DataFrame(resultados).sort_values(by="Año")
             
-            ruta_completa = os.path.join(TEMP_DIR, archivo)
-            info = extraer_info_pdf(ruta_completa, KEYWORDS)
+            # Resaltar puntos críticos
+            def resaltar_nodales(val):
+                color = 'background-color: #ffcccc' if val == '🔥 CRÍTICO' else ''
+                return color
+
+            st.success(f"✅ Análisis Finalizado. {len(resultados)} sentencias encontradas.")
             
-            if info:
-                resultados.append(info)
-                
-        # 4. Finalizar Análisis
-        if not resultados:
-            st.warning("Se analizaron los PDFs, pero ninguno contenía las palabras clave.")
+            # Mostrar con estilo
+            st.dataframe(df.style.applymap(resaltar_nodales, subset=['Relevancia']), use_container_width=True)
+
+            # Descargas
+            c1, c2 = st.columns(2)
+            with c1:
+                towrite = io.BytesIO()
+                df.to_excel(towrite, index=False, engine='openpyxl')
+                st.download_button("📥 Excel", towrite.getvalue(), "LUCAS_Turbo.xlsx")
+            with c2:
+                # PDF simple
+                pdf = FPDF()
+                pdf.add_page()
+                pdf.set_font("Arial", size=10)
+                pdf.cell(200, 10, txt="REPORTE LUCAS - LIBERTAD DE PRENSA", ln=1, align='C')
+                for i, r in df.iterrows():
+                    pdf.multi_cell(0, 10, txt=f"AÑO: {r['Año']} | {r['Sentencia']} | RELEVANCIA: {r['Relevancia']}\nKeywords: {r['Puntos Nodales (Palabras)']}\nPáginas: {r['Páginas']}\n" + "-"*40)
+                st.download_button("📥 Reporte PDF", pdf.output(dest='S').encode('latin-1'), "LUCAS_Reporte.pdf")
+
         else:
-            df_resultados = pd.DataFrame(resultados)
-            # Orden cronológico (del más antiguo al más reciente)
-            df_resultados = df_resultados.sort_values(by='Año').reset_index(drop=True)
-            
-            placeholder_carga.empty()
-            progreso.empty()
-            
-            st.success(f"✅ Análisis Completo: Se encontró el universo en {len(resultados)} sentencias.")
-            
-            # Mostrar Tabla
-            st.table(df_resultados)
-            
-            # Botones de Descarga
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                excel_data = generar_excel(df_resultados)
-                st.download_button(
-                    label="📥 Descargar Excel",
-                    data=excel_data,
-                    file_name=f"LUCAS_Reporte_{date.today()}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
-                
-            with col2:
-                pdf_data = generar_pdf_reporte(df_resultados)
-                st.download_button(
-                    label="📥 Descargar Reporte PDF",
-                    data=pdf_data,
-                    file_name=f"LUCAS_Reporte_{date.today()}.pdf",
-                    mime="application/pdf"
-                )
-                
+            st.warning("No se hallaron coincidencias en los documentos analizados.")
+
     except Exception as e:
-        placeholder_carga.empty()
-        st.error(f"Ocurrió un error crítico durante la ejecución: {e}")
-        
+        st.error(f"Error en el sistema: {e}")
     finally:
-        # 5. Limpieza del servidor (Vital para no llenar el disco)
-        if os.path.exists(TEMP_DIR):
-            shutil.rmtree(TEMP_DIR)
+        if os.path.exists(TEMP_DIR): shutil.rmtree(TEMP_DIR)
